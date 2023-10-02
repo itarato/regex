@@ -155,22 +155,9 @@ impl PatternSection {
     }
 }
 
-#[derive(Debug)]
-struct Engine {
-    transitions: HashMap<LeftT, State>,
-    finish_state: State,
-}
+struct Parser;
 
-impl Engine {
-    fn new(pattern: &str) -> Engine {
-        let pattern = Engine::parse(pattern);
-        let (transitions, finish_state) = pattern.to_transition(0, 1);
-        Engine {
-            transitions,
-            finish_state,
-        }
-    }
-
+impl Parser {
     fn parse(raw: &str) -> PatternSection {
         let mut stack: Vec<PatternSection> = vec![];
         let mut ops: Vec<Op> = vec![];
@@ -180,9 +167,9 @@ impl Engine {
 
         for c in raw.chars() {
             if let Some(pattern_mod) = Mod::from(&c) {
-                Engine::inject_mod(&mut stack, pattern_mod);
+                Parser::inject_mod(&mut stack, pattern_mod);
             } else if c == '|' {
-                Engine::collapse_stacks(&mut stack, &mut ops, |op| match op {
+                Parser::collapse_stacks(&mut stack, &mut ops, |op| match op {
                     Some(Op::And) => false,
                     _ => true,
                 });
@@ -195,7 +182,7 @@ impl Engine {
                 need_and = false;
                 ops.push(Op::Paren)
             } else if c == ')' {
-                Engine::collapse_stacks(&mut stack, &mut ops, |op| match op {
+                Parser::collapse_stacks(&mut stack, &mut ops, |op| match op {
                     Some(Op::Paren) => true,
                     _ => false,
                 });
@@ -216,7 +203,7 @@ impl Engine {
             idx += 1;
         }
 
-        Engine::collapse_stacks(&mut stack, &mut ops, |op| match op {
+        Parser::collapse_stacks(&mut stack, &mut ops, |op| match op {
             None => true,
             Some(_) => false,
         });
@@ -236,7 +223,7 @@ impl Engine {
                 return;
             }
 
-            let (op, count) = Engine::pop_same(ops);
+            let (op, count) = Parser::pop_same(ops);
             if op.is_none() {
                 return;
             }
@@ -280,6 +267,47 @@ impl Engine {
 
         stack.push(new_pattern);
     }
+}
+
+#[derive(Debug)]
+struct Engine {
+    transitions: HashMap<LeftT, State>,
+    finish_state: State,
+}
+
+impl Engine {
+    fn new(pattern: &str) -> Engine {
+        let pattern = Parser::parse(pattern);
+        let (transitions, finish_state) = pattern.to_transition(0, 1);
+        Engine {
+            transitions,
+            finish_state,
+        }
+    }
+
+    fn is_match(&self, s: &str) -> bool {
+        let mut stack: Vec<(State, usize)> = vec![(0, 0)];
+        let chars = s.chars().collect::<Vec<_>>();
+
+        while let Some((state, i)) = stack.pop() {
+            if i < chars.len() {
+                if let Some(new_state) = self.transitions.get(&(state, Some(chars[i]))) {
+                    if new_state == &self.finish_state && i == chars.len() - 1 {
+                        return true;
+                    }
+                    stack.push((*new_state, i + 1));
+                }
+            }
+            if let Some(new_state) = self.transitions.get(&(state, None)) {
+                if new_state == &self.finish_state && i >= chars.len() {
+                    return true;
+                }
+                stack.push((*new_state, i));
+            }
+        }
+
+        false
+    }
 
     fn dump_dot(&self) {
         println!("digraph {{");
@@ -308,11 +336,17 @@ impl Engine {
 }
 
 fn main() {
-    let mut args = std::env::args();
-    if args.len() != 2 {
-        panic!("Missing arguments. Call: ./bin PATTERN");
-    }
+    let args = std::env::args().collect::<Vec<_>>();
+    let eng = Engine::new(args[1].as_str());
 
-    let eng = Engine::new(args.nth(1).expect("Missing argument").as_str());
-    eng.dump_dot();
+    if args.len() == 2 {
+        eng.dump_dot();
+    } else if args.len() == 3 {
+        dbg!(eng.is_match(args[2].as_str()));
+    } else {
+        panic!(
+            "Invalid call with {} args. Do ./bin PATTERN or ./bin PATTERN STRING",
+            args.len()
+        )
+    }
 }
