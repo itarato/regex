@@ -52,14 +52,7 @@ impl PatternSection {
                 out.insert((start, None), end);
             }
             Mod::OneOrMore => {
-                let (states, new_end) = self.to_transition_without_mod(end, end + 1);
-                for (k, v) in states {
-                    out.insert(k, v);
-                }
-
-                out.insert((new_end, None), end);
-                out.insert((end, None), new_end + 1);
-                end = new_end + 1;
+                out.insert((end, None), start);
             }
             Mod::Any => {
                 // Todo: Avoid unnecessary extension.
@@ -312,17 +305,20 @@ impl Engine {
     fn dump_dot(&self) {
         println!("digraph {{");
 
-        for (k, v) in &self.transitions {
-            let start_label = if k.0 == 0 {
+        let finish = self.finish_state;
+        let to_label = |s: State| {
+            if s == 0 {
                 "Start".into()
-            } else {
-                format!("S{}", k.0)
-            };
-            let end_label = if v == &self.finish_state {
+            } else if s == finish {
                 "Finish".into()
             } else {
-                format!("S{}", v)
-            };
+                format!("S{}", s)
+            }
+        };
+
+        for (k, v) in &self.transitions {
+            let start_label = to_label(k.0);
+            let end_label = to_label(*v);
             println!(
                 "\t{} -> {}[label=\"{}\"]",
                 start_label,
