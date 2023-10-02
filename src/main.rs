@@ -57,7 +57,16 @@ impl PatternSection {
             Mod::ZeroOrOne => {
                 out.insert((start, None), end);
             }
-            Mod::OneOrMore => unimplemented!(),
+            Mod::OneOrMore => {
+                let (states, new_end) = self.to_transition_without_mod(end, end + 1);
+                for (k, v) in states {
+                    out.insert(k, v);
+                }
+
+                out.insert((new_end, None), end);
+                out.insert((end, None), new_end + 1);
+                end = new_end + 1;
+            }
             Mod::Any => {
                 // Todo: Avoid unnecessary extension.
                 out.insert((end, None), start);
