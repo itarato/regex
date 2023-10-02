@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env::Args};
+use std::collections::HashMap;
 
 type State = usize;
 type LeftT = (State, Option<char>);
@@ -39,20 +39,14 @@ enum PatternSection {
 impl PatternSection {
     fn to_transition(&self, start: State, next: State) -> (HashMap<LeftT, State>, State) {
         let mut out = HashMap::new();
-        let mut end = start;
 
         let (states, new_end) = self.to_transition_without_mod(start, next);
         for (k, v) in states {
             out.insert(k, v);
         }
-        end = new_end;
+        let mut end = new_end;
 
-        let m = match self {
-            PatternSection::And(_, m) => m,
-            PatternSection::Or(_, m) => m,
-            PatternSection::Char(_, m) => m,
-        };
-        match m {
+        match self.get_mod() {
             Mod::One => {}
             Mod::ZeroOrOne => {
                 out.insert((start, None), end);
@@ -84,9 +78,9 @@ impl PatternSection {
         next: State,
     ) -> (HashMap<LeftT, State>, State) {
         match self {
-            PatternSection::And(list, m) => self.to_transition_and(list, start, next),
-            PatternSection::Or(list, m) => self.to_transition_or(list, start, next),
-            PatternSection::Char(c, m) => self.to_transition_char(*c, start, next),
+            PatternSection::And(list, _) => self.to_transition_and(list, start, next),
+            PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
+            PatternSection::Char(c, _) => self.to_transition_char(*c, start, next),
         }
     }
 
@@ -97,12 +91,8 @@ impl PatternSection {
         next: State,
     ) -> (HashMap<LeftT, State>, State) {
         let mut out = HashMap::new();
-        let mut end = start;
-
-        out.insert((end, Some(c)), next);
-        end = next;
-
-        (out, end)
+        out.insert((start, Some(c)), next);
+        (out, next)
     }
 
     fn to_transition_and(
@@ -113,13 +103,15 @@ impl PatternSection {
     ) -> (HashMap<LeftT, State>, State) {
         let mut out = HashMap::new();
         let mut end = start;
+        let mut new_next = next;
 
         for section in list {
-            let (states, new_end) = section.to_transition(end, end + 1);
+            let (states, new_end) = section.to_transition(end, new_next);
             for (k, v) in states {
                 out.insert(k, v);
             }
             end = new_end;
+            new_next = end + 1;
         }
 
         (out, end)
@@ -132,25 +124,34 @@ impl PatternSection {
         next: State,
     ) -> (HashMap<LeftT, State>, State) {
         let mut out = HashMap::new();
-        let mut end = start;
         let mut latest_end = start;
+        let mut new_next = next;
         let mut ends = vec![];
 
         for section in list {
-            let (states, new_end) = section.to_transition(start, latest_end + 1);
+            let (states, new_end) = section.to_transition(start, new_next);
             ends.push(new_end);
             latest_end = new_end;
+            new_next = latest_end + 1;
             for (k, v) in states {
                 out.insert(k, v);
             }
         }
+
         // Todo: figure out how to skip the +1 last transition.
         for prev_end in ends {
             out.insert((prev_end, None), latest_end + 1);
         }
-        end = latest_end + 1;
 
-        (out, end)
+        (out, latest_end + 1)
+    }
+
+    fn get_mod(&self) -> &Mod {
+        match self {
+            PatternSection::And(_, m) => m,
+            PatternSection::Or(_, m) => m,
+            PatternSection::Char(_, m) => m,
+        }
     }
 }
 
@@ -284,7 +285,22 @@ impl Engine {
         println!("digraph {{");
 
         for (k, v) in &self.transitions {
-            println!("\t{} -> {}[label=\"{}\"]", k.0, v, k.1.unwrap_or(' '));
+            let start_label = if k.0 == 0 {
+                "Start".into()
+            } else {
+                format!("S{}", k.0)
+            };
+            let end_label = if v == &self.finish_state {
+                "Finish".into()
+            } else {
+                format!("S{}", v)
+            };
+            println!(
+                "\t{} -> {}[label=\"{}\"]",
+                start_label,
+                end_label,
+                k.1.unwrap_or(' ')
+            );
         }
 
         println!("}}");
