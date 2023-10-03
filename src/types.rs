@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 pub type State = usize;
 pub type LeftT = (State, Option<char>);
+pub type TransitionAndEndState = (HashMap<LeftT, State>, State);
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Op {
@@ -37,7 +38,7 @@ pub enum PatternSection {
 }
 
 impl PatternSection {
-    pub fn to_transition(&self, start: State, next: State) -> (HashMap<LeftT, State>, State) {
+    pub fn to_transition(&self, start: State, next: State) -> TransitionAndEndState {
         let mut out = HashMap::new();
 
         let (states, new_end) = self.to_transition_without_mod(start, next);
@@ -55,7 +56,6 @@ impl PatternSection {
                 out.insert((end, None), start);
             }
             Mod::Any => {
-                // Todo: Avoid unnecessary extension.
                 out.insert((end, None), start);
                 out.insert((start, None), end + 1);
                 end += 1;
@@ -145,5 +145,74 @@ impl PatternSection {
             PatternSection::Or(_, m) => m,
             PatternSection::Char(_, m) => m,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::parser::*;
+    use crate::types::*;
+
+    #[test]
+    fn test_empty() {
+        assert_eq!(transition_this(""), (HashMap::from([]), 0));
+    }
+
+    #[test]
+    fn test_and() {
+        assert_eq!(
+            transition_this("abc"),
+            (
+                HashMap::from([
+                    ((0, Some('a')), 1),
+                    ((1, Some('b')), 2),
+                    ((2, Some('c')), 3),
+                ]),
+                3,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_or() {
+        assert_eq!(
+            transition_this("a|bc|d"),
+            (
+                HashMap::from([
+                    ((0, Some('a')), 1),
+                    ((0, Some('b')), 2),
+                    ((2, Some('c')), 3),
+                    ((0, Some('d')), 4),
+                    ((1, None), 5),
+                    ((3, None), 5),
+                    ((4, None), 5),
+                ]),
+                5
+            )
+        );
+    }
+
+    #[test]
+    fn test_mods() {
+        assert_eq!(
+            transition_this("a+"),
+            (HashMap::from([((0, Some('a')), 1), ((1, None), 0)]), 1,),
+        );
+        assert_eq!(
+            transition_this("a?"),
+            (HashMap::from([((0, Some('a')), 1), ((0, None), 1)]), 1,),
+        );
+        assert_eq!(
+            transition_this("a*"),
+            (
+                HashMap::from([((0, Some('a')), 1), ((1, None), 0), ((0, None), 2)]),
+                2
+            ),
+        );
+    }
+
+    fn transition_this(raw_pattern: &str) -> TransitionAndEndState {
+        let p = Parser::parse(raw_pattern);
+        p.to_transition(0, 1)
     }
 }

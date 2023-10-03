@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 mod engine;
 mod parser;
 mod types;
