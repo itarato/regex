@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 pub type State = usize;
 pub type LeftT = (State, Option<char>);
-pub type TransitionAndEndState = (HashMap<LeftT, State>, State);
+pub type Transition = HashMap<LeftT, Vec<State>>;
+pub type TransitionAndEndState = (Transition, State);
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Op {
@@ -42,22 +43,22 @@ impl PatternSection {
         let mut out = HashMap::new();
 
         let (states, new_end) = self.to_transition_without_mod(start, next);
-        for (k, v) in states {
-            out.insert(k, v);
+        for (k, mut v) in states {
+            out.entry(k).or_insert(vec![]).append(&mut v);
         }
         let mut end = new_end;
 
         match self.get_mod() {
             Mod::One => {}
             Mod::ZeroOrOne => {
-                out.insert((start, None), end);
+                out.entry((start, None)).or_insert(vec![]).push(end);
             }
             Mod::OneOrMore => {
-                out.insert((end, None), start);
+                out.entry((end, None)).or_insert(vec![]).push(start);
             }
             Mod::Any => {
-                out.insert((end, None), start);
-                out.insert((start, None), end + 1);
+                out.entry((end, None)).or_insert(vec![]).push(start);
+                out.entry((start, None)).or_insert(vec![]).push(end + 1);
                 end += 1;
             }
         }
@@ -65,11 +66,7 @@ impl PatternSection {
         (out, end)
     }
 
-    fn to_transition_without_mod(
-        &self,
-        start: State,
-        next: State,
-    ) -> (HashMap<LeftT, State>, State) {
+    fn to_transition_without_mod(&self, start: State, next: State) -> TransitionAndEndState {
         match self {
             PatternSection::And(list, _) => self.to_transition_and(list, start, next),
             PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
@@ -77,14 +74,9 @@ impl PatternSection {
         }
     }
 
-    fn to_transition_char(
-        &self,
-        c: char,
-        start: State,
-        next: State,
-    ) -> (HashMap<LeftT, State>, State) {
+    fn to_transition_char(&self, c: char, start: State, next: State) -> TransitionAndEndState {
         let mut out = HashMap::new();
-        out.insert((start, Some(c)), next);
+        out.entry((start, Some(c))).or_insert(vec![]).push(next);
         (out, next)
     }
 
@@ -93,15 +85,15 @@ impl PatternSection {
         list: &Vec<PatternSection>,
         start: State,
         next: State,
-    ) -> (HashMap<LeftT, State>, State) {
+    ) -> TransitionAndEndState {
         let mut out = HashMap::new();
         let mut end = start;
         let mut new_next = next;
 
         for section in list {
             let (states, new_end) = section.to_transition(end, new_next);
-            for (k, v) in states {
-                out.insert(k, v);
+            for (k, mut v) in states {
+                out.entry(k).or_insert(vec![]).append(&mut v);
             }
             end = new_end;
             new_next = end + 1;
@@ -115,7 +107,7 @@ impl PatternSection {
         list: &Vec<PatternSection>,
         start: State,
         next: State,
-    ) -> (HashMap<LeftT, State>, State) {
+    ) -> TransitionAndEndState {
         let mut out = HashMap::new();
         let mut latest_end = start;
         let mut new_next = next;
@@ -126,14 +118,16 @@ impl PatternSection {
             ends.push(new_end);
             latest_end = new_end;
             new_next = latest_end + 1;
-            for (k, v) in states {
-                out.insert(k, v);
+            for (k, mut v) in states {
+                out.entry(k).or_insert(vec![]).append(&mut v);
             }
         }
 
         // Todo: figure out how to skip the +1 last transition.
         for prev_end in ends {
-            out.insert((prev_end, None), latest_end + 1);
+            out.entry((prev_end, None))
+                .or_insert(vec![])
+                .push(latest_end + 1);
         }
 
         (out, latest_end + 1)
@@ -164,9 +158,9 @@ mod test {
             transition_this("abc"),
             (
                 HashMap::from([
-                    ((0, Some('a')), 1),
-                    ((1, Some('b')), 2),
-                    ((2, Some('c')), 3),
+                    ((0, Some('a')), vec![1]),
+                    ((1, Some('b')), vec![2]),
+                    ((2, Some('c')), vec![3]),
                 ]),
                 3,
             ),
@@ -179,13 +173,13 @@ mod test {
             transition_this("a|bc|d"),
             (
                 HashMap::from([
-                    ((0, Some('a')), 1),
-                    ((0, Some('b')), 2),
-                    ((2, Some('c')), 3),
-                    ((0, Some('d')), 4),
-                    ((1, None), 5),
-                    ((3, None), 5),
-                    ((4, None), 5),
+                    ((0, Some('a')), vec![1]),
+                    ((0, Some('b')), vec![2]),
+                    ((2, Some('c')), vec![3]),
+                    ((0, Some('d')), vec![4]),
+                    ((1, None), vec![5]),
+                    ((3, None), vec![5]),
+                    ((4, None), vec![5]),
                 ]),
                 5
             )
@@ -196,16 +190,26 @@ mod test {
     fn test_mods() {
         assert_eq!(
             transition_this("a+"),
-            (HashMap::from([((0, Some('a')), 1), ((1, None), 0)]), 1,),
+            (
+                HashMap::from([((0, Some('a')), vec![1]), ((1, None), vec![0])]),
+                1,
+            ),
         );
         assert_eq!(
             transition_this("a?"),
-            (HashMap::from([((0, Some('a')), 1), ((0, None), 1)]), 1,),
+            (
+                HashMap::from([((0, Some('a')), vec![1]), ((0, None), vec![1])]),
+                1,
+            ),
         );
         assert_eq!(
             transition_this("a*"),
             (
-                HashMap::from([((0, Some('a')), 1), ((1, None), 0), ((0, None), 2)]),
+                HashMap::from([
+                    ((0, Some('a')), vec![1]),
+                    ((1, None), vec![0]),
+                    ((0, None), vec![2])
+                ]),
                 2
             ),
         );

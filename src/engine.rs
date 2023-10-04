@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use crate::parser::*;
 use crate::types::*;
 
 #[derive(Debug)]
 pub struct Engine {
-    transitions: HashMap<LeftT, State>,
+    transitions: Transition,
     finish_state: State,
 }
 
@@ -29,12 +27,16 @@ impl Engine {
             }
 
             if i < chars.len() {
-                if let Some(new_state) = self.transitions.get(&(state, Some(chars[i]))) {
-                    stack.push((*new_state, i + 1));
+                if let Some(new_states) = self.transitions.get(&(state, Some(chars[i]))) {
+                    for new_state in new_states {
+                        stack.push((*new_state, i + 1));
+                    }
                 }
             }
-            if let Some(new_state) = self.transitions.get(&(state, None)) {
-                stack.push((*new_state, i));
+            if let Some(new_states) = self.transitions.get(&(state, None)) {
+                for new_state in new_states {
+                    stack.push((*new_state, i));
+                }
             }
         }
 
@@ -57,13 +59,15 @@ impl Engine {
             }
         };
 
-        for (k, v) in &self.transitions {
-            println!(
-                "\t{} -> {}[label=\"{}\"]",
-                to_label(k.0),
-                to_label(*v),
-                k.1.unwrap_or(' ')
-            );
+        for (k, vs) in &self.transitions {
+            for v in vs {
+                println!(
+                    "\t{} -> {}[label=\"{}\"]",
+                    to_label(k.0),
+                    to_label(*v),
+                    k.1.unwrap_or(' ')
+                );
+            }
         }
 
         println!("}}");
@@ -73,7 +77,6 @@ impl Engine {
 #[cfg(test)]
 mod test {
     use crate::engine::*;
-    use crate::parser::*;
 
     #[test]
     fn test_empty() {
@@ -163,5 +166,6 @@ mod test {
         assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("aaa"));
         assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("ac"));
         assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("acc"));
+        assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("acdddddc"));
     }
 }
