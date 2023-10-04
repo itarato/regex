@@ -24,18 +24,16 @@ impl Engine {
         let chars = s.chars().collect::<Vec<_>>();
 
         while let Some((state, i)) = stack.pop() {
+            if state == self.finish_state && i >= chars.len() {
+                return true;
+            }
+
             if i < chars.len() {
                 if let Some(new_state) = self.transitions.get(&(state, Some(chars[i]))) {
-                    if new_state == &self.finish_state && i == chars.len() - 1 {
-                        return true;
-                    }
                     stack.push((*new_state, i + 1));
                 }
             }
             if let Some(new_state) = self.transitions.get(&(state, None)) {
-                if new_state == &self.finish_state && i >= chars.len() {
-                    return true;
-                }
                 stack.push((*new_state, i));
             }
         }
@@ -69,5 +67,101 @@ impl Engine {
         }
 
         println!("}}");
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::engine::*;
+    use crate::parser::*;
+
+    #[test]
+    fn test_empty() {
+        assert!(Engine::new("").is_match(""));
+        assert!(!Engine::new("").is_match("a"));
+        assert!(!Engine::new("").is_match("abc"));
+    }
+
+    #[test]
+    fn test_paren() {
+        assert!(Engine::new("a(a)a").is_match("aaa"));
+        assert!(Engine::new("aa(a)").is_match("aaa"));
+        assert!(Engine::new("(aa)a").is_match("aaa"));
+
+        assert!(!Engine::new("a(a)a").is_match("aaaa"));
+        assert!(!Engine::new("aa(a)").is_match("aaaa"));
+        assert!(!Engine::new("(aa)a").is_match("aaaa"));
+
+        assert!(!Engine::new("a(a)a").is_match("aa"));
+        assert!(!Engine::new("aa(a)").is_match("aa"));
+        assert!(!Engine::new("(aa)a").is_match("aa"));
+    }
+
+    #[test]
+    fn test_or() {
+        assert!(Engine::new("a|b").is_match("a"));
+        assert!(Engine::new("a|b").is_match("b"));
+
+        assert!(!Engine::new("a|b").is_match("ba"));
+        assert!(!Engine::new("a|b").is_match("ab"));
+        assert!(!Engine::new("a|b").is_match(""));
+    }
+
+    #[test]
+    fn test_mod_any() {
+        assert!(Engine::new("a*").is_match(""));
+        assert!(Engine::new("a*").is_match("a"));
+        assert!(Engine::new("a*").is_match("aaaaaaaaaaaaaaaaaaaaaa"));
+
+        assert!(!Engine::new("a*").is_match("aaaab"));
+
+        assert!(Engine::new("(aaa)*").is_match(""));
+        assert!(Engine::new("(aaa)*").is_match("aaa"));
+        assert!(Engine::new("(aaa)*").is_match("aaaaaa"));
+
+        assert!(!Engine::new("(aaa)*").is_match("a"));
+        assert!(!Engine::new("(aaa)*").is_match("aa"));
+    }
+
+    #[test]
+    fn test_mod_one_or_more() {
+        assert!(Engine::new("a+").is_match("a"));
+        assert!(Engine::new("a+").is_match("aaaa"));
+
+        assert!(!Engine::new("a+").is_match(""));
+        assert!(!Engine::new("a+").is_match("b"));
+        assert!(!Engine::new("a+").is_match("aab"));
+
+        assert!(Engine::new("(aaa)+").is_match("aaa"));
+        assert!(Engine::new("(aaa)+").is_match("aaaaaaaaa"));
+
+        assert!(!Engine::new("(aaa)+").is_match("aa"));
+        assert!(!Engine::new("(aaa)+").is_match("aab"));
+    }
+
+    #[test]
+    fn test_mod_zero_or_one() {
+        assert!(Engine::new("a?").is_match(""));
+        assert!(Engine::new("a?").is_match("a"));
+
+        assert!(!Engine::new("a?").is_match("aaa"));
+        assert!(!Engine::new("a?").is_match("b"));
+
+        assert!(Engine::new("(aaa)?").is_match(""));
+        assert!(Engine::new("(aaa)?").is_match("aaa"));
+
+        assert!(!Engine::new("(aaa)?").is_match("a"));
+        assert!(!Engine::new("(aaa)?").is_match("aa"));
+        assert!(!Engine::new("(aaa)?").is_match("aab"));
+    }
+
+    #[test]
+    fn test_complex() {
+        assert!(Engine::new("cc?|cc").is_match("c"));
+
+        assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match(""));
+        assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("aaa"));
+        assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("ac"));
+        assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("acc"));
     }
 }
