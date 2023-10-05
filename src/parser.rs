@@ -35,7 +35,7 @@ impl Parser {
                 if idx < raw.len() - 1 {
                     need_and = true;
                 }
-            } else if c.is_ascii_alphabetic() {
+            } else if c.is_ascii_alphanumeric() {
                 stack.push(PatternSection::Char(c, Mod::One));
                 if need_and {
                     ops.push(Op::And);
@@ -178,7 +178,7 @@ mod test {
                                 vec![
                                     PatternSection::And(
                                         vec![
-                                            PatternSection::Char('e', Mod::One),
+                                            PatternSection::Char('1', Mod::One),
                                             PatternSection::Char('f', Mod::One),
                                         ],
                                         Mod::One,
@@ -206,7 +206,7 @@ mod test {
                 ],
                 Mod::One,
             ),
-            Parser::parse("ab?|(cd|(ef|gh|ij)?)*"),
+            Parser::parse("ab?|(cd|(1f|gh|ij)?)*"),
         );
     }
 }
