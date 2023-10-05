@@ -108,6 +108,9 @@ impl Parser {
             PatternSection::And(v, _) => PatternSection::And(v, m),
             PatternSection::Or(v, _) => PatternSection::Or(v, m),
             PatternSection::Char(v, _) => PatternSection::Char(v, m),
+            PatternSection::CharGroup(v, _, is_negated) => {
+                PatternSection::CharGroup(v, m, is_negated)
+            }
         };
 
         stack.push(new_pattern);

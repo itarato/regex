@@ -36,6 +36,7 @@ pub enum PatternSection {
     And(Vec<PatternSection>, Mod),
     Or(Vec<PatternSection>, Mod),
     Char(char, Mod),
+    CharGroup(Vec<char>, Mod, bool), // chars + mod + is-negated
 }
 
 impl PatternSection {
@@ -71,6 +72,7 @@ impl PatternSection {
             PatternSection::And(list, _) => self.to_transition_and(list, start, next),
             PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
             PatternSection::Char(c, _) => self.to_transition_char(*c, start, next),
+            PatternSection::CharGroup(c, _, is_negated) => unimplemented!(),
         }
     }
 
@@ -138,6 +140,7 @@ impl PatternSection {
             PatternSection::And(_, m) => m,
             PatternSection::Or(_, m) => m,
             PatternSection::Char(_, m) => m,
+            PatternSection::CharGroup(_, m, _) => m,
         }
     }
 }
