@@ -72,7 +72,27 @@ impl PatternSection {
             PatternSection::And(list, _) => self.to_transition_and(list, start, next),
             PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
             PatternSection::Char(c, _) => self.to_transition_char(*c, start, next),
-            PatternSection::CharGroup(c, _, is_negated) => unimplemented!(),
+            PatternSection::CharGroup(cs, _, is_negated) => {
+                self.to_transition_char_group(cs, *is_negated, start, next)
+            }
+        }
+    }
+
+    fn to_transition_char_group(
+        &self,
+        chars: &Vec<char>,
+        is_negated: bool,
+        start: State,
+        next: State,
+    ) -> TransitionAndEndState {
+        if is_negated {
+            unimplemented!()
+        } else {
+            let mut out = HashMap::new();
+            for c in chars {
+                out.entry((start, Some(*c))).or_insert(vec![]).push(next);
+            }
+            (out, next)
         }
     }
 

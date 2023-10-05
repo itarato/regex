@@ -174,4 +174,20 @@ mod test {
         assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("acc"));
         assert!(Engine::new("a*(bb|cc?|(aaa|cd+c|d+))?").is_match("acdddddc"));
     }
+
+    #[test]
+    fn test_char_group() {
+        assert!(Engine::new("ab[cd]").is_match("abc"));
+        assert!(Engine::new("ab[cd]").is_match("abd"));
+
+        assert!(!Engine::new("ab[cd]").is_match("abe"));
+        assert!(!Engine::new("ab[cd]").is_match("abcd"));
+
+        assert!(Engine::new("ab[cd]*").is_match("ab"));
+        assert!(Engine::new("ab[cd]*").is_match("abc"));
+        assert!(Engine::new("ab[cd]*").is_match("abccccc"));
+        assert!(Engine::new("ab[cd]*").is_match("abddccdccc"));
+
+        assert!(!Engine::new("ab[cd]*").is_match("abddccdcccr"));
+    }
 }
