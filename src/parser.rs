@@ -35,7 +35,7 @@ impl Parser {
                 if idx < raw.len() - 1 {
                     need_and = true;
                 }
-            } else if c.is_ascii_alphanumeric() {
+            } else if c.is_ascii_alphanumeric() || c == '.' {
                 stack.push(PatternSection::Char(c, Mod::One));
                 if need_and {
                     ops.push(Op::And);

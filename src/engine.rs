@@ -32,6 +32,12 @@ impl Engine {
                         stack.push((*new_state, i + 1));
                     }
                 }
+
+                if let Some(new_states) = self.transitions.get(&(state, Some('.'))) {
+                    for new_state in new_states {
+                        stack.push((*new_state, i + 1));
+                    }
+                }
             }
             if let Some(new_states) = self.transitions.get(&(state, None)) {
                 for new_state in new_states {
