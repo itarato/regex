@@ -10,7 +10,8 @@ impl Parser {
         let mut need_and = false;
         let mut idx = 0usize;
 
-        for c in raw.chars() {
+        let mut raw_it = raw.chars();
+        while let Some(c) = raw_it.next() {
             if let Some(pattern_mod) = Mod::from(&c) {
                 Parser::inject_mod(&mut stack, pattern_mod);
             } else if c == '|' {
@@ -35,6 +36,35 @@ impl Parser {
                 if idx < raw.len() - 1 {
                     need_and = true;
                 }
+            } else if c == '[' {
+                let mut next_c = raw_it.next().expect("Missing end of char group");
+                let is_negated = next_c == '^';
+                let mut char_group_chars = vec![];
+
+                if next_c == '^' {
+                    next_c = raw_it.next().expect("Missing end of char group");
+                }
+
+                loop {
+                    if next_c == ']' {
+                        break;
+                    }
+
+                    char_group_chars.push(next_c);
+
+                    next_c = raw_it.next().expect("Missing end of char group");
+                }
+
+                stack.push(PatternSection::CharGroup(
+                    char_group_chars,
+                    Mod::One,
+                    is_negated,
+                ));
+
+                if need_and {
+                    ops.push(Op::And);
+                }
+                need_and = true;
             } else if c.is_ascii_alphanumeric() || c == '.' {
                 stack.push(PatternSection::Char(c, Mod::One));
                 if need_and {
@@ -153,6 +183,41 @@ mod test {
                 Mod::One
             ),
             Parser::parse("a|b*")
+        );
+    }
+
+    #[test]
+    fn test_char_group() {
+        assert_eq!(
+            PatternSection::And(
+                vec![
+                    PatternSection::Char('a', Mod::One),
+                    PatternSection::CharGroup(vec!['b', 'c'], Mod::One, false),
+                    PatternSection::Char('d', Mod::One),
+                ],
+                Mod::One
+            ),
+            Parser::parse("a[bc]d"),
+        );
+        assert_eq!(
+            PatternSection::Or(
+                vec![
+                    PatternSection::Char('a', Mod::One),
+                    PatternSection::CharGroup(vec!['b', 'c'], Mod::One, true),
+                ],
+                Mod::One
+            ),
+            Parser::parse("a|[^bc]"),
+        );
+        assert_eq!(
+            PatternSection::And(
+                vec![
+                    PatternSection::CharGroup(vec!['b', 'c'], Mod::Any, true),
+                    PatternSection::Char('a', Mod::One),
+                ],
+                Mod::One
+            ),
+            Parser::parse("[^bc]*a"),
         );
     }
 
