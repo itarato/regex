@@ -43,7 +43,15 @@ impl PatternSection {
     pub fn to_transition(&self, start: State, next: State) -> TransitionAndEndState {
         let mut out = HashMap::new();
 
-        let (states, new_end) = self.to_transition_without_mod(start, next);
+        let (states, new_end) = match self {
+            PatternSection::And(list, _) => self.to_transition_and(list, start, next),
+            PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
+            PatternSection::Char(c, _) => self.to_transition_char(*c, start, next),
+            PatternSection::CharGroup(cs, _, is_negated) => {
+                self.to_transition_char_group(cs, *is_negated, start, next)
+            }
+        };
+
         for (k, mut v) in states {
             out.entry(k).or_insert(vec![]).append(&mut v);
         }
@@ -65,17 +73,6 @@ impl PatternSection {
         }
 
         (out, end)
-    }
-
-    fn to_transition_without_mod(&self, start: State, next: State) -> TransitionAndEndState {
-        match self {
-            PatternSection::And(list, _) => self.to_transition_and(list, start, next),
-            PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
-            PatternSection::Char(c, _) => self.to_transition_char(*c, start, next),
-            PatternSection::CharGroup(cs, _, is_negated) => {
-                self.to_transition_char_group(cs, *is_negated, start, next)
-            }
-        }
     }
 
     fn to_transition_char_group(
