@@ -36,7 +36,7 @@ impl Engine {
     pub fn dump_dot(&self) {
         println!("digraph {{");
         println!("\tStart [color=\"blue\"]");
-        println!("\tFinish [color=\"green\"]");
+        println!("\tFinish [color=\"orange\"]");
 
         let finish = self.finish_state;
         let to_label = |s: State| {
@@ -52,10 +52,11 @@ impl Engine {
         for (k, vs) in &self.transitions.base {
             for v in vs {
                 println!(
-                    "\t{} -> {}[label=\"{}\"]",
+                    "\t{} -> {}[label=\"{}\",color=\"{}\"]",
                     to_label(k.0),
                     to_label(*v),
-                    k.1.unwrap_or(' ')
+                    k.1.unwrap_or(' '),
+                    k.1.map(|_| "black").unwrap_or("green")
                 );
             }
         }
