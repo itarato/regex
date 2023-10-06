@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 pub type State = usize;
 pub type LeftT = (State, Option<char>);
-pub type NegagteLeftT = (State, Vec<char>);
 pub type TransitionAndEndState = (Transition, State);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Transition {
     pub base: HashMap<LeftT, Vec<State>>,
-    pub negated: HashMap<NegagteLeftT, Vec<State>>,
+    //                   From           NotChars   To
+    pub negated: HashMap<State, HashMap<Vec<char>, Vec<State>>>,
 }
 
 impl Transition {
@@ -24,8 +24,11 @@ impl Transition {
             self.base.entry(k).or_insert(vec![]).append(&mut v);
         }
 
-        for (k, mut v) in other.negated {
-            self.negated.entry(k).or_insert(vec![]).append(&mut v);
+        for (k, v) in other.negated {
+            let submap = self.negated.entry(k).or_insert(HashMap::new());
+            for (subk, mut subv) in v {
+                submap.entry(subk).or_insert(vec![]).append(&mut subv);
+            }
         }
     }
 
@@ -33,8 +36,9 @@ impl Transition {
         self.base.entry(k).or_insert(vec![]).push(v);
     }
 
-    pub fn insert_negated(&mut self, k: NegagteLeftT, v: State) {
-        self.negated.entry(k).or_insert(vec![]).push(v);
+    pub fn insert_negated(&mut self, state: State, not_chars: Vec<char>, to: State) {
+        let submap = self.negated.entry(state).or_insert(HashMap::new());
+        submap.entry(not_chars).or_insert(vec![]).push(to);
     }
 
     pub fn states_from(&self, state: State, c: Option<&char>, i: usize) -> Vec<(State, usize)> {
@@ -53,11 +57,12 @@ impl Transition {
                 }
             }
 
-            // REFACTOR THIS YOU LAZY SCUM!
-            for (k, new_states) in &self.negated {
-                if k.0 == state && !k.1.contains(c) {
-                    for new_state in new_states {
-                        out.push((*new_state, i + 1));
+            if let Some(submap) = self.negated.get(&state) {
+                for (not_chars, new_states) in submap {
+                    if !not_chars.contains(c) {
+                        for new_state in new_states {
+                            out.push((*new_state, i + 1));
+                        }
                     }
                 }
             }
@@ -151,7 +156,7 @@ impl PatternSection {
         let mut out = Transition::new();
 
         if is_negated {
-            out.insert_negated((start, chars.clone()), next);
+            out.insert_negated(start, chars.clone(), next);
         } else {
             for c in chars {
                 out.insert_base((start, Some(*c)), next);
@@ -229,76 +234,153 @@ mod test {
     use crate::parser::*;
     use crate::types::*;
 
-    // #[test]
-    // fn test_empty() {
-    //     assert_eq!(transition_this(""), (HashMap::from([]), 0));
-    // }
+    #[test]
+    fn test_empty() {
+        assert_eq!(transition_this(""), (TransitionBuilder::new().build(), 0));
+    }
 
-    // #[test]
-    // fn test_and() {
-    //     assert_eq!(
-    //         transition_this("abc"),
-    //         (
-    //             HashMap::from([
-    //                 ((0, Some('a')), vec![1]),
-    //                 ((1, Some('b')), vec![2]),
-    //                 ((2, Some('c')), vec![3]),
-    //             ]),
-    //             3,
-    //         ),
-    //     );
-    // }
+    #[test]
+    fn test_and() {
+        assert_eq!(
+            transition_this("abc"),
+            (
+                TransitionBuilder::new()
+                    .with_base(HashMap::from([
+                        ((0, Some('a')), vec![1]),
+                        ((1, Some('b')), vec![2]),
+                        ((2, Some('c')), vec![3]),
+                    ]))
+                    .build(),
+                3,
+            ),
+        );
+    }
 
-    // #[test]
-    // fn test_or() {
-    //     assert_eq!(
-    //         transition_this("a|bc|d"),
-    //         (
-    //             HashMap::from([
-    //                 ((0, Some('a')), vec![1]),
-    //                 ((0, Some('b')), vec![2]),
-    //                 ((2, Some('c')), vec![3]),
-    //                 ((0, Some('d')), vec![4]),
-    //                 ((1, None), vec![5]),
-    //                 ((3, None), vec![5]),
-    //                 ((4, None), vec![5]),
-    //             ]),
-    //             5
-    //         )
-    //     );
-    // }
+    #[test]
+    fn test_or() {
+        assert_eq!(
+            transition_this("a|b.|3"),
+            (
+                TransitionBuilder::new()
+                    .with_base(HashMap::from([
+                        ((0, Some('a')), vec![1]),
+                        ((0, Some('b')), vec![2]),
+                        ((2, Some('.')), vec![3]),
+                        ((0, Some('3')), vec![4]),
+                        ((1, None), vec![5]),
+                        ((3, None), vec![5]),
+                        ((4, None), vec![5]),
+                    ]))
+                    .build(),
+                5
+            )
+        );
+    }
 
-    // #[test]
-    // fn test_mods() {
-    //     assert_eq!(
-    //         transition_this("a+"),
-    //         (
-    //             HashMap::from([((0, Some('a')), vec![1]), ((1, None), vec![0])]),
-    //             1,
-    //         ),
-    //     );
-    //     assert_eq!(
-    //         transition_this("a?"),
-    //         (
-    //             HashMap::from([((0, Some('a')), vec![1]), ((0, None), vec![1])]),
-    //             1,
-    //         ),
-    //     );
-    //     assert_eq!(
-    //         transition_this("a*"),
-    //         (
-    //             HashMap::from([
-    //                 ((0, Some('a')), vec![1]),
-    //                 ((1, None), vec![0]),
-    //                 ((0, None), vec![2])
-    //             ]),
-    //             2
-    //         ),
-    //     );
-    // }
+    #[test]
+    fn test_mods() {
+        assert_eq!(
+            transition_this("a+"),
+            (
+                TransitionBuilder::new()
+                    .with_base(HashMap::from([
+                        ((0, Some('a')), vec![1]),
+                        ((1, None), vec![0])
+                    ]))
+                    .build(),
+                1,
+            ),
+        );
+        assert_eq!(
+            transition_this("a?"),
+            (
+                TransitionBuilder::new()
+                    .with_base(HashMap::from([
+                        ((0, Some('a')), vec![1]),
+                        ((0, None), vec![1])
+                    ]))
+                    .build(),
+                1,
+            ),
+        );
+        assert_eq!(
+            transition_this("a*"),
+            (
+                TransitionBuilder::new()
+                    .with_base(HashMap::from([
+                        ((0, Some('a')), vec![1]),
+                        ((1, None), vec![0]),
+                        ((0, None), vec![2])
+                    ]))
+                    .build(),
+                2
+            ),
+        );
+    }
+
+    #[test]
+    fn test_groups() {
+        assert_eq!(
+            transition_this("[ab]"),
+            (
+                TransitionBuilder::new()
+                    .with_base(HashMap::from([
+                        ((0, Some('b')), vec![1]),
+                        ((0, Some('a')), vec![1]),
+                    ]))
+                    .build(),
+                1,
+            ),
+        );
+
+        assert_eq!(
+            transition_this("[^ab]"),
+            (
+                TransitionBuilder::new()
+                    .with_negated(HashMap::from([(
+                        0,
+                        HashMap::from([(vec!['a', 'b'], vec![1])])
+                    ),]))
+                    .build(),
+                1,
+            ),
+        );
+    }
 
     fn transition_this(raw_pattern: &str) -> TransitionAndEndState {
         let p = Parser::parse(raw_pattern);
         p.to_transition(0, 1)
+    }
+
+    struct TransitionBuilder {
+        t: Transition,
+    }
+
+    impl TransitionBuilder {
+        fn new() -> TransitionBuilder {
+            TransitionBuilder {
+                t: Transition::new(),
+            }
+        }
+
+        fn with_base(
+            mut self,
+            base: HashMap<(State, Option<char>), Vec<State>>,
+        ) -> TransitionBuilder {
+            self.t.base = base;
+            self
+        }
+
+        fn with_negated(
+            mut self,
+            negated: HashMap<State, HashMap<Vec<char>, Vec<State>>>,
+        ) -> TransitionBuilder {
+            self.t.negated = negated;
+            self
+        }
+
+        fn build(self) -> Transition {
+            self.t
+        }
     }
 }

@@ -60,17 +60,20 @@ impl Engine {
             }
         }
 
-        for (k, vs) in &self.transitions.negated {
-            for v in vs {
-                println!(
-                    "\t{} -> {}[label=\"^{}\",color=\"purple\"]",
-                    to_label(k.0),
-                    to_label(*v),
-                    k.1.iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<_>>()
-                        .join("")
-                );
+        for (from_state, submap) in &self.transitions.negated {
+            for (not_chars, to_states) in submap {
+                for to_state in to_states {
+                    println!(
+                        "\t{} -> {}[label=\"^{}\",color=\"purple\"]",
+                        to_label(*from_state),
+                        to_label(*to_state),
+                        not_chars
+                            .iter()
+                            .map(|c| c.to_string())
+                            .collect::<Vec<_>>()
+                            .join("")
+                    );
+                }
             }
         }
 
