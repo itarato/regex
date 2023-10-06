@@ -26,24 +26,8 @@ impl Engine {
                 return true;
             }
 
-            if i < chars.len() {
-                if let Some(new_states) = self.transitions.get(&(state, Some(chars[i]))) {
-                    for new_state in new_states {
-                        stack.push((*new_state, i + 1));
-                    }
-                }
-
-                if let Some(new_states) = self.transitions.get(&(state, Some('.'))) {
-                    for new_state in new_states {
-                        stack.push((*new_state, i + 1));
-                    }
-                }
-            }
-            if let Some(new_states) = self.transitions.get(&(state, None)) {
-                for new_state in new_states {
-                    stack.push((*new_state, i));
-                }
-            }
+            let mut new_states = self.transitions.states_from(state, chars.get(i), i);
+            stack.append(&mut new_states);
         }
 
         false
@@ -65,13 +49,27 @@ impl Engine {
             }
         };
 
-        for (k, vs) in &self.transitions {
+        for (k, vs) in &self.transitions.base {
             for v in vs {
                 println!(
                     "\t{} -> {}[label=\"{}\"]",
                     to_label(k.0),
                     to_label(*v),
                     k.1.unwrap_or(' ')
+                );
+            }
+        }
+
+        for (k, vs) in &self.transitions.negated {
+            for v in vs {
+                println!(
+                    "\t{} -> {}[label=\"^{}\",color=\"purple\"]",
+                    to_label(k.0),
+                    to_label(*v),
+                    k.1.iter()
+                        .map(|c| c.to_string())
+                        .collect::<Vec<_>>()
+                        .join("")
                 );
             }
         }
@@ -189,5 +187,16 @@ mod test {
         assert!(Engine::new("ab[cd]*").is_match("abddccdccc"));
 
         assert!(!Engine::new("ab[cd]*").is_match("abddccdcccr"));
+    }
+
+    #[test]
+    fn test_negated_char_group() {
+        assert!(Engine::new("a[^bc]d").is_match("aed"));
+        assert!(Engine::new("a[^bc]d").is_match("aad"));
+        assert!(Engine::new("a[^bc]d").is_match("add"));
+
+        assert!(!Engine::new("a[^bc]d").is_match("abd"));
+        assert!(!Engine::new("a[^bc]d").is_match("acd"));
+        assert!(!Engine::new("a[^bc]d").is_match("ad"));
     }
 }
