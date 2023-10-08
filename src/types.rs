@@ -117,14 +117,7 @@ impl PatternSection {
     pub fn to_transition(&self, start: State, next: State) -> TransitionAndEndState {
         let mut out = Transition::new();
 
-        let (states, new_end) = match self {
-            PatternSection::And(list, _) => self.to_transition_and(list, start, next),
-            PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
-            PatternSection::Char(c, _) => self.to_transition_char(*c, start, next),
-            PatternSection::CharGroup(cs, _, is_negated) => {
-                self.to_transition_char_group(cs, *is_negated, start, next)
-            }
-        };
+        let (states, new_end) = self.to_transition_without_mod(start, next);
 
         out.merge(states);
         let mut end = new_end;
@@ -143,11 +136,41 @@ impl PatternSection {
                 end += 1;
             }
             Mod::Range(min, max) => {
-                unimplemented!();
+                let mut skip_list = vec![];
+
+                assert!(*max >= 1);
+
+                if *min == 0 {
+                    skip_list.push(start);
+                }
+
+                for i in 1..*max {
+                    if i >= *min {
+                        skip_list.push(end);
+                    }
+                    let (states, new_end) = self.to_transition_without_mod(end, end + 1);
+                    out.merge(states);
+                    end = new_end;
+                }
+
+                for skip_state in skip_list {
+                    out.insert_base((skip_state, None), end);
+                }
             }
         }
 
         (out, end)
+    }
+
+    fn to_transition_without_mod(&self, start: State, next: State) -> TransitionAndEndState {
+        match self {
+            PatternSection::And(list, _) => self.to_transition_and(list, start, next),
+            PatternSection::Or(list, _) => self.to_transition_or(list, start, next),
+            PatternSection::Char(c, _) => self.to_transition_char(*c, start, next),
+            PatternSection::CharGroup(cs, _, is_negated) => {
+                self.to_transition_char_group(cs, *is_negated, start, next)
+            }
+        }
     }
 
     fn to_transition_char_group(
