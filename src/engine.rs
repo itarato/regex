@@ -203,4 +203,19 @@ mod test {
         assert!(!Engine::new("a[^bc]d").is_match("acd"));
         assert!(!Engine::new("a[^bc]d").is_match("ad"));
     }
+
+    #[test]
+    fn test_mod_range() {
+        assert!(Engine::new("ab{3}c").is_match("abbbc"));
+
+        assert!(!Engine::new("ab{3}c").is_match("abbc"));
+        assert!(!Engine::new("ab{3}c").is_match("abbbbc"));
+
+        assert!(Engine::new("ab{1,3}c").is_match("abc"));
+        assert!(Engine::new("ab{1,3}c").is_match("abbc"));
+        assert!(Engine::new("ab{1,3}c").is_match("abbbc"));
+
+        assert!(!Engine::new("ab{1,3}c").is_match("ac"));
+        assert!(!Engine::new("ab{1,3}c").is_match("abbbbc"));
+    }
 }
