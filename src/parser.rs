@@ -65,6 +65,40 @@ impl Parser {
                     ops.push(Op::And);
                 }
                 need_and = true;
+            } else if c == '{' {
+                let mut min_str = String::new();
+                let mut min_is_max = false;
+                let min: usize;
+                let max: usize;
+
+                loop {
+                    let next_c = raw_it.next().expect("Missing char");
+                    if next_c == ',' {
+                        break;
+                    } else if next_c == '}' {
+                        min_is_max = true;
+                        break;
+                    }
+                    min_str.push(next_c);
+                }
+
+                min = usize::from_str_radix(&min_str, 10).expect("Invalid number");
+                if !min_is_max {
+                    let mut max_str = String::new();
+                    loop {
+                        let next_c = raw_it.next().expect("Missing char");
+                        if next_c == '}' {
+                            break;
+                        }
+                        max_str.push(next_c);
+                    }
+
+                    max = usize::from_str_radix(&max_str, 10).expect("Invalid number");
+                } else {
+                    max = min;
+                }
+
+                Parser::inject_mod(&mut stack, Mod::Range(min, max));
             } else if c.is_ascii_alphanumeric() || c == '.' {
                 stack.push(PatternSection::Char(c, Mod::One));
                 if need_and {
@@ -218,6 +252,19 @@ mod test {
                 Mod::One
             ),
             Parser::parse("[^bc]*a"),
+        );
+    }
+
+    #[test]
+    fn test_mod_range() {
+        assert_eq!(
+            PatternSection::Char('a', Mod::Range(3, 3)),
+            Parser::parse("a{3}"),
+        );
+
+        assert_eq!(
+            PatternSection::Char('a', Mod::Range(3, 6)),
+            Parser::parse("a{3,6}"),
         );
     }
 

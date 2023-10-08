@@ -91,6 +91,7 @@ pub enum Mod {
     ZeroOrOne,
     OneOrMore,
     Any,
+    Range(usize, usize),
 }
 
 impl Mod {
@@ -140,6 +141,9 @@ impl PatternSection {
                 out.insert_base((end, None), start);
                 out.insert_base((start, None), end + 1);
                 end += 1;
+            }
+            Mod::Range(min, max) => {
+                unimplemented!();
             }
         }
 
